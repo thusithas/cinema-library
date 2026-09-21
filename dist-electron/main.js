@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -36,6 +36,13 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+ipcMain.handle("app:get-info", () => {
+  return {
+    name: "Cinema Library",
+    version: app.getVersion(),
+    platform: process.platform
+  };
 });
 app.whenReady().then(createWindow);
 export {
