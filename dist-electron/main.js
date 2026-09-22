@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, dialog } from "electron";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import fs from "node:fs/promises";
 createRequire(import.meta.url);
 const __dirname$1 = path.dirname(fileURLToPath(import.meta.url));
 process.env.APP_ROOT = path.join(__dirname$1, "..");
@@ -26,6 +27,41 @@ function createWindow() {
     win.loadFile(path.join(RENDERER_DIST, "index.html"));
   }
 }
+const VIDEO_EXTENSIONS = /* @__PURE__ */ new Set([
+  ".mkv",
+  ".mp4",
+  ".avi",
+  ".m4v",
+  ".mov",
+  ".wmv",
+  ".webm",
+  ".ts",
+  ".m2ts"
+]);
+async function scanDirectory(directory) {
+  const videoFiles = [];
+  async function walk(currentDirectory) {
+    const entries = await fs.readdir(currentDirectory, {
+      withFileTypes: true
+    });
+    for (const entry of entries) {
+      const fullPath = path.join(currentDirectory, entry.name);
+      if (entry.isDirectory()) {
+        await walk(fullPath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        continue;
+      }
+      const extension = path.extname(entry.name).toLowerCase();
+      if (VIDEO_EXTENSIONS.has(extension)) {
+        videoFiles.push(fullPath);
+      }
+    }
+  }
+  await walk(directory);
+  return videoFiles;
+}
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
@@ -43,6 +79,18 @@ ipcMain.handle("app:get-info", () => {
     version: app.getVersion(),
     platform: process.platform
   };
+});
+ipcMain.handle("library:select-folder", async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ["openDirectory"]
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+ipcMain.handle("library:scan-folder", async (_event, folderPath) => {
+  return await scanDirectory(folderPath);
 });
 app.whenReady().then(createWindow);
 export {

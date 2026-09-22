@@ -1,7 +1,8 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
+import fs from 'node:fs/promises'
 
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -47,6 +48,50 @@ function createWindow() {
   }
 }
 
+const VIDEO_EXTENSIONS = new Set([
+  '.mkv',
+  '.mp4',
+  '.avi',
+  '.m4v',
+  '.mov',
+  '.wmv',
+  '.webm',
+  '.ts',
+  '.m2ts',
+])
+
+async function scanDirectory(directory: string): Promise<string[]> {
+  const videoFiles: string[] = []
+
+  async function walk(currentDirectory: string) {
+    const entries = await fs.readdir(currentDirectory, {
+      withFileTypes: true,
+    })
+
+    for (const entry of entries) {
+      const fullPath = path.join(currentDirectory, entry.name)
+
+      if (entry.isDirectory()) {
+        await walk(fullPath)
+        continue
+      }
+
+      if (!entry.isFile()) {
+        continue
+      }
+
+      const extension = path.extname(entry.name).toLowerCase()
+
+      if (VIDEO_EXTENSIONS.has(extension)) {
+        videoFiles.push(fullPath)
+      }
+    }
+  }
+
+  await walk(directory)
+
+  return videoFiles
+}
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
@@ -72,4 +117,21 @@ ipcMain.handle('app:get-info', () => {
     platform: process.platform,
   }
 })
+
+ipcMain.handle('library:select-folder', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+  })
+
+  if (result.canceled || result.filePaths.length === 0) {
+    return null
+  }
+
+  return result.filePaths[0]
+})
+
+ipcMain.handle('library:scan-folder', async (_event, folderPath: string) => {
+  return await scanDirectory(folderPath)
+})
+
 app.whenReady().then(createWindow)

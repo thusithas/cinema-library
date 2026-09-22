@@ -29,5 +29,10 @@ interface Window {
       version: string
       platform: string
     }>
+     selectLibraryFolder: () => Promise<string | null>
+
+    scanLibraryFolder: (
+      folderPath: string
+    ) => Promise<string[]>
   }
 }
